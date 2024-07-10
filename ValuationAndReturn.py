@@ -1,5 +1,5 @@
 """
-CRE Return Metrics
+CRE Valuation and Return Of Investment Metrics
 """
 from typing import (
     Union,
@@ -23,25 +23,51 @@ class DealMetrics:
     """
     def __init__(self,
         purchase_price: int,
+        going_in_cap_rate: float,
         closing_and_renovations: int,
-        net_operating_income: int,
-        annual_noi_growth: float,
-        percentage: bool = False,
+        net_leasable_area: Union[int, float],
+        yearly_sf_operating_revenue: Union[int, float],
+        yearly_sf_operating_expenses: Union[int, float],
+        yearly_sf_capital_reserves: Union[int, float],
+        annual_revenue_growth: float,
+        annual_expense_growth: float,
+        annual_capital_reserve_growth: float,
+        percentage: bool = True,
     ) -> None:
         self.purchase_price: int = math.floor(purchase_price)
         self.closing_and_renovations: int = math.floor(closing_and_renovations)
-        self.net_operating_income: int = math.floor(net_operating_income)
+        self.net_leasable_area: Union[int, float] = round(net_leasable_area, 2)
+
         if percentage:
-            self.annual_noi_growth: float = round(annual_noi_growth / 100, 5)
+            self.going_in_cap_rate: float = round(going_in_cap_rate / 100, 4)
+            self.annual_revenue_growth: float = round(annual_revenue_growth / 100, 4)
+            self.annual_expense_growth: float = round(annual_expense_growth / 100, 4)
+            self.annual_capital_reserve_growth: float = round(annual_capital_reserve_growth / 100, 4)
         else:
-            self.annual_noi_growth: float = round(annual_noi_growth, 5)
+            self.going_in_cap_rate: float = round(going_in_cap_rate, 4)
+            self.annual_revenue_growth: float = round(annual_revenue_growth, 4)
+            self.annual_expense_growth: float = round(annual_expense_growth, 4)
+            self.annual_capital_reserve_growth: float = round(annual_capital_reserve_growth, 4)
+
+        # Calculated Fields
+        self.initial_revenue: Union[int, float] = round(self.net_leasable_area * yearly_sf_operating_revenue, 2)
+        self.initial_expenses: Union[int, float] = - round(self.net_leasable_area * yearly_sf_operating_expenses, 2)
+        self.initial_capital_reserve: Union[int, float] = - round(self.net_leasable_area * yearly_sf_capital_reserves, 2)
 
     def __str__(self) -> str:
+        """JSON string like that represents the initial metricss of the deal.
+        """
         deal_metrics: Dict = {
             "PurchasePrice": self.purchase_price,
-            "ClosinAndRenovations": self.closing_and_renovations,
-            "NetOperatinIncome": self.net_operating_income,
-            "AnnualNOIGrowth(%)": round(self.annual_noi_growth * 100, 2)
+            "GoingInCapRate(%)": round(self.going_in_cap_rate * 100, 2),
+            "ClosingAndRenovations": self.closing_and_renovations,
+            "NetLeasableArea": self.net_leasable_area,
+            "Year1Revenue": self.initial_revenue,
+            "Year1Expenses": self.initial_expenses,
+            "Year1CapitalReserve": self.initial_capital_reserve,
+            "AnnualRevenueGrowth(%)": round(self.annual_revenue_growth * 100,2),
+            "AnnualExpensesGrowth(%)": round(self.annual_expense_growth * 100, 2),
+            "AnnualCapitalReservesGrowth(%)": round(self.annual_capital_reserve_growth * 100, 2),
         }
         return json.dumps(deal_metrics, indent=4)
 
@@ -57,8 +83,9 @@ class LoanTerms:
         amortization: int,
         term: int,
         future_value: int = 0,
-        percentage: bool = False,
+        percentage: bool = True,
     ) -> None:
+
         self.amortization: int = math.floor(amortization)
         self.term: int = math.floor(term)
 
@@ -224,7 +251,7 @@ class SaleMetrics:
         exit_cap_rate: float,
         cost_of_sale: float,
         sale_year:int,
-        percentage: bool = False,
+        percentage: bool =True,
     ) -> None:
         self.sale_year: int = sale_year
 
@@ -262,20 +289,41 @@ class SaleMetrics:
 
 class ReturnOfInvestmentMetrics:
     """How much money I am getting out of this?.
+
+    NOTES: Because the selling of the property is part of the IRR and part of
+    the EquityMultiple, we will asume that always the sell of the property is
+    whats comming at the end of the term. The value is needed anyway for
+    refinancing porpuses too. Also for this case, the year of the sale will
+    always be the end of the term.
     """
     def __init__(
         self,
         deal_metrics: DealMetrics,
         loan_terms: LoanTerms,
-        sale_metrics: Optional[SaleMetrics] = None,
+        sale_metrics: SaleMetrics,
     ) -> None:
         self.deal_metrics: DealMetrics = deal_metrics
         self.loan_terms: LoanTerms = loan_terms
-        self.sale_metrics: Optional[SaleMetrics]  = sale_metrics
+        self.sale_metrics: SaleMetrics  = sale_metrics
 
         # CALCULATED FIELDS
         self.adquisition_cost: float = self.AdquisitionCost()
-        # self.cap_rate: float = self.CapRate()
+        self.yearly_net_cash_flow_projection = self.YearlyNetCashFlowProjection()
+        self.levered_net_cash_flows = self.LeveredNetCashFlows()
+
+        # RETURN METRICS
+        self.irr: float = self.IRR()
+        self.equity_multiple: float = self.EquityMultiple()
+        self.average_cash_on_cash_return: float = self.AverageCashOnCashReturn()
+
+    def __str__(self) -> str:
+        string = {
+            "IRR(%)": self.irr,
+            "EquityMultiple": self.equity_multiple,
+            "AverageCashOnCashReturn": self.average_cash_on_cash_return,
+            "YearlyNetCashFlowProjection": self.yearly_net_cash_flow_projection,
+        }
+        return json.dumps(string, indent=4)
 
     def AdquisitionCost(self) -> float:
         """The money that I have to put for the purchase of the CRE.
@@ -291,23 +339,6 @@ class ReturnOfInvestmentMetrics:
             self.loan_terms.loan_ammount
         )
         return round(net_cash_flow, 2)
-
-    def CapRate(self) -> float:
-        """Capitalization (Cap) Rate. Yield on net operating income based on
-        the purchase price without taking into account debt or capital expenses
-        on the deal.
-
-        Returns
-        -------
-        float
-        """
-        cap_rate = (
-            self.deal_metrics.net_operating_income
-            /
-            self.deal_metrics.purchase_price
-        )
-        cap_rate = round(cap_rate, 4)
-        return cap_rate
 
     def CashOnCashReturn(
         self,
@@ -325,16 +356,9 @@ class ReturnOfInvestmentMetrics:
 
     def AverageCashOnCashReturn(
         self,
-        yearly_cash_on_cash_return: List[float],
     ) -> float:
         """Average Cash on Cash Return of the investment during the term of the
         loan.
-
-        Parameters
-        ----------
-        yearly_cash_on_cash_return: List[float]
-            List of all the cash on cash returns calculated through the term of
-            the loan.
 
         Returns
         -------
@@ -342,202 +366,142 @@ class ReturnOfInvestmentMetrics:
             Percentage that represents the Average Cash on Cash return of
             investment.
         """
-        return round(statistics.mean(yearly_cash_on_cash_return), 2)
+        return round(statistics.mean(self.YearlyCashOnCashReturn()), 2)
 
     def IRR(
         self,
-        levered_net_cash_flows: List[float],
     ) -> float:
         """Internal Rate of Return. The IRR is the interest rate (also known as
         the discount rate) that will bring a series of cash flows (positive and
         negative) to a net present value (NPV) of zero (or to the current value
         of cash invested).
 
-        Parameters
-        ----------
-        levered_net_cash_flows: List[float]
-            List of all the net cash flows from the CRE investment during the
-            term of the loan, starting always with the adquisition costs.
-
         Returns
         -------
         float
             Percentage that represent the IRR of the investment.
         """
-        return round(npf.irr(levered_net_cash_flows) * 100, 2)
+        return round(npf.irr(self.levered_net_cash_flows) * 100, 2)
 
     def EquityMultiple(
         self,
-        levered_net_cash_flows: List[float],
     ) -> float:
         """
         """
-        return round(sum(levered_net_cash_flows) / abs(self.adquisition_cost), 2)
+        return round( 1 + sum(self.levered_net_cash_flows) / abs(self.adquisition_cost), 2)
 
-    def InvestmentReturns(self) -> Dict[str, Any]:
-        """Return measurements. Creates a digestable information table
-        regarding the different return metrics of the deal.
+    def YearlyNetCashFlowProjection(self) -> List:
+        """Porjected performance of the property during the term of the loan.
 
         Returns
         -------
-        Dict[str, Any]
+        List[Dict[str, Any]]
+            Net Chasflows of the properties year by year.
         """
-        deal: Dict = {
-            "PurchasePrice": self.deal_metrics.purchase_price,
-            "ClosingCosts": self.deal_metrics.closing_and_renovations,
-            "LoanProceeds": self.loan_terms.loan_ammount,
-            "LoanOriginationFees(%)": round(self.loan_terms.loan_origination_fees * 100, 2),
-            "AdquisitionCost": self.adquisition_cost,
-            "BalloonPayment": self.loan_terms.balloon_payment,
-            "AverageCashOnCashReturn(%)": 0,
-            "IRR(%)": 0,
-            "EquityMultiple": 0,
-            # where we are going to store the values for each year of operation
-            # during the term
-            "YearlyCashOnCashReturn": [],
-        }
+        yearly_net_cash_flow = [
+            {"NetCashFlow": self.adquisition_cost},
+        ]
 
-        net_operating_income: Union[int, float] = self.deal_metrics.net_operating_income
-        yearly_loan_payment: float = self.loan_terms.yearly_loan_payment
-
-        cash_on_cash_return: List[float] = []
-
-        if self.sale_metrics:
-            if self.loan_terms.term != self.sale_metrics.sale_year:
-                raise ValueError("The year of selling is different to the term of the loan.")
-
+        revenue: Union[int, float] = self.deal_metrics.initial_revenue
+        expenses: Union[int, float] = self.deal_metrics.initial_expenses
+        capital_reserve: Union[int, float] = self.deal_metrics.initial_capital_reserve
+        debt_payment: float = self.loan_terms.yearly_loan_payment
         for i in range(1, self.loan_terms.term + 1, 1):
-            net_cash_flow = net_operating_income + yearly_loan_payment
-            year: Dict = {
+            noi: Union[int, float] = round(revenue + expenses, 2)
+            net_cash_flow: Union[int, float] = round(noi + capital_reserve + debt_payment, 2)
+            cash_on_cash_return = self.CashOnCashReturn(net_cash_flow)
+            year = {
                 "Year": i,
-                "CashFlow": net_operating_income,
-                "LoanPayment": yearly_loan_payment,
-                "NetCashFlow": round(net_cash_flow, 2),
-                "CashOnCashReturn(%)": self.CashOnCashReturn(net_cash_flow),
+                "Revenue": revenue,
+                "Expenses": expenses,
+                "NOI": noi,
+                "CapitalReserve": capital_reserve,
+                "NetCashFlow": net_cash_flow,
+                "CashOnCashReturn": cash_on_cash_return,
             }
-            deal["YearlyCashOnCashReturn"].append(year)
-            cash_on_cash_return.append(year["CashOnCashReturn(%)"])
-            net_operating_income += round(net_operating_income * self.deal_metrics.annual_noi_growth, 2)
-            # In the last iteration, the NOI variable keeps the value of the
-            # year after the term. This is the value that we need to calculate
-            # the selling price of the property at the end of the term.
-            net_operating_income = round(net_operating_income, 2)
+            yearly_net_cash_flow.append(year)
+            revenue += round(revenue * self.deal_metrics.annual_revenue_growth, 2)
+            revenue = round(revenue, 2)
+            expenses += round(expenses * self.deal_metrics.annual_expense_growth, 2)
+            expenses = round(expenses, 2)
+            capital_reserve += round(capital_reserve * self.deal_metrics.annual_capital_reserve_growth, 2)
+            capital_reserve = round(capital_reserve, 2)
 
-        # Average CoC
-        deal["AverageCashOnCashReturn(%)"] = self.AverageCashOnCashReturn(cash_on_cash_return)
+        after_term_noi = round(revenue + expenses, 2)
 
-        # this is what happends if there is a sale at the end of the term.
-        if self.sale_metrics:
-            sale: Dict = deal["YearlyCashOnCashReturn"][-1]
+        # Adding the cashflow when the CRE is sold at the end of the term.
+        sale: Dict = yearly_net_cash_flow[-1]
+        sale["NetCashFlow"] = round((
+            sale["NetCashFlow"] +
+            self.sale_metrics.ProjectedSalePrice(after_term_noi) +
+            self.loan_terms.balloon_payment
+        ), 2)
+        return yearly_net_cash_flow
 
-            # the idea of this code is to add here the changes in the last
-            # cashflow when we sell the property, which would be,
-            # NetCashFlow of that year + calculated sale price of the property
-            # + the BalloonPayment of the deal at the end of the term.
-            sale["NetCashFlow"] = round((
-                sale["NetCashFlow"] +
-                self.sale_metrics.ProjectedSalePrice(net_operating_income) +
-                deal["BalloonPayment"]
-            ), 2)
-
-        # IRR
-        # This is a hack to make the creation of the list faster. We create the
-        # list of all the yearlys NetCashFlow and then, we insert at the
-        # begining of the list the AdquisitionCost of the deal. The order
-        # matters.
-        levered_net_cash_flows = [
-                i["NetCashFlow"] for i in deal["YearlyCashOnCashReturn"]
+    def LeveredNetCashFlows(self) -> List[float]:
+        levered_net_cash_flows: List[float] = [
+            i["NetCashFlow"] for i in self.yearly_net_cash_flow_projection
         ]
-        levered_net_cash_flows.insert(0, deal["AdquisitionCost"])
-        deal["IRR(%)"] = self.IRR(levered_net_cash_flows)
+        return levered_net_cash_flows
 
-        # EquityMultiple
-        levered_net_cash_flows = [
-                i["NetCashFlow"] for i in deal["YearlyCashOnCashReturn"]
+    def YearlyCashOnCashReturn(self) -> List[float]:
+        yearly_cash_on_cash_return: List[float] = [
+            i["CashOnCashReturn"] for i in self.yearly_net_cash_flow_projection
+            if "CashOnCashReturn" in i
         ]
-        deal["EquityMultiple"] = self.EquityMultiple(levered_net_cash_flows)
-        return deal
+        return yearly_cash_on_cash_return
 
 
 if __name__ == "__main__":
 
     import json
 
-    new_deal = DealMetrics(
-        purchase_price = 10_000_000,
-        closing_and_renovations = 100_000,
-        net_operating_income = 600_000,
-        annual_noi_growth = 3.0,
-        percentage = True,
+    # purchase_price = 8_000_000
+    purchase_price = 6_500_000
+
+    deal = DealMetrics(
+        purchase_price=purchase_price,
+        going_in_cap_rate=4.84,
+        closing_and_renovations=80_000,
+        net_leasable_area=25_000,
+        yearly_sf_operating_revenue=27.50,
+        yearly_sf_operating_expenses=12.00,
+        yearly_sf_capital_reserves=0.30,
+        annual_revenue_growth=3.00,
+        annual_expense_growth=2.50,
+        annual_capital_reserve_growth=2.50,
     )
 
-    print("NEW DEAL")
-    print(new_deal)
+    print("DEAL DETAILS")
+    print(deal)
 
     loan_terms = LoanTerms(
-        purchase_price = 10_000_000,
-        loan_to_value_ratio = 70,
-        loan_origination_fees = 1,
-        interest_rate = 4.5,
-        amortization = 30,
-        term = 10,
-        percentage = True,
+        purchase_price=purchase_price,
+        loan_to_value_ratio=70,
+        loan_origination_fees=1,
+        interest_rate=4.5,
+        amortization=30,
+        term=10,
     )
 
     print("LOAN TERMS")
     print(loan_terms)
 
-    new_sale = SaleMetrics(
-        exit_cap_rate=6.75,
+    sale = SaleMetrics(
+        exit_cap_rate=6.25,
         cost_of_sale=2.50,
         sale_year=10,
         percentage=True,
     )
 
-    print("NEW SALE")
-    print(new_sale)
+    print("SALE END OF THE TERM")
+    print(sale)
 
-
-    deal_metrics = ReturnOfInvestmentMetrics(
-        deal_metrics=new_deal,
+    deal_projection = ReturnOfInvestmentMetrics(
+        deal_metrics=deal,
         loan_terms=loan_terms,
-        # sale_metrics=new_sale,
+        sale_metrics=sale,
     )
 
-
-    string = json.dumps(deal_metrics.InvestmentReturns(), indent=4)
-    print(string)
-
-    # new_deal = DealMetrics(
-    #     purchase_price = 10_000_000,
-    #     closing_and_renovations = 100_000,
-    #     net_operating_income = 600_000,
-    #     annual_noi_growth = 3.0,
-    #     percentage = True,
-    # )
-
-    # print("NEW DEAL")
-    # print(new_deal)
-
-    # loan_terms = LoanTerms(
-    #     loan_to_value_ratio = 0,
-    #     loan_ammount = 0,
-    #     loan_origination_fees = 0,
-    #     interest_rate = 0,
-    #     amortization = 0,
-    #     term = 10,
-    #     percentage = True,
-    # )
-
-    # print("LOAN TERMS")
-    # print(loan_terms)
-
-    # deal_metrics = ReturnOfInvestmentMetrics(
-    #     deal_metrics=new_deal,
-    #     loan_terms=loan_terms,
-    # )
-
-    # string = json.dumps(deal_metrics.CashOnCashReturn(), indent=4)
-
-    # print(string)
-
+    print("DEAL RETURN PROJECTION")
+    print(deal_projection)
