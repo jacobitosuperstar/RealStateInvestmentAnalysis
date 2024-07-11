@@ -18,6 +18,63 @@ import numpy as np
 import numpy_financial as npf
 
 
+class CREInformation:
+    def __init__(
+        self,
+        net_leasable_area: Union[int, float],
+        initial_yearly_sf_operating_revenue: Union[int, float],
+        initial_yearly_sf_operating_expenses: Union[int, float],
+        initial_yearly_sf_capital_reserves: Union[int, float],
+    ) -> None:
+        self.net_leasable_area: Union[int, float] = round(net_leasable_area, 2)
+        self.initial_yearly_sf_operating_revenue: Union[int, float] = round(
+            initial_yearly_sf_operating_revenue,
+            2,
+        )
+        self.initial_yearly_sf_operating_expenses: Union[int, float] = round(
+            initial_yearly_sf_operating_expenses,
+            2,
+        )
+        self.initial_yearly_sf_capital_reserves: Union[int, float] = round(
+            initial_yearly_sf_capital_reserves,
+            2,
+        )
+
+    def __str__(self) -> str:
+        string: Dict = {
+            "NetLeasableArea": self.net_leasable_area,
+            "Year1SFOperatingRevenue": self.initial_yearly_sf_operating_revenue,
+            "Year1SFOperatingExpenses": self.initial_yearly_sf_operating_expenses,
+            "Year1SFCapitalReserves": self.initial_yearly_sf_capital_reserves,
+        }
+        return json.dumps(string, indent=4)
+
+    def CREYearlyRevenue(self) -> float:
+        """Yearly Revenue Per Square Feet multiplied by the Net Leasable Area.
+        """
+        return round(
+            self.net_leasable_area * self.initial_yearly_sf_operating_revenue,
+            2,
+        )
+
+    def CREYearlyExpenses(self) -> float:
+        """Yearly Expenses Per Square Feet multiplied by the Net Leasable Area.
+        """
+        return round(
+            self.net_leasable_area * self.initial_yearly_sf_operating_expenses,
+            2,
+        )
+
+    def CREYearlyCapitalReserves(self) -> float:
+        """Yearly Capital Reserves Per Square Feet multiplied by the Net
+        Leasable Area.
+        """
+        return round(
+            self.net_leasable_area * self.initial_yearly_sf_capital_reserves,
+            2,
+        )
+
+
 class DealMetrics:
     """All the information that comes from the client.
     """
@@ -25,10 +82,9 @@ class DealMetrics:
         purchase_price: int,
         going_in_cap_rate: float,
         closing_and_renovations: int,
-        net_leasable_area: Union[int, float],
-        yearly_sf_operating_revenue: Union[int, float],
-        yearly_sf_operating_expenses: Union[int, float],
-        yearly_sf_capital_reserves: Union[int, float],
+        initial_yearly_revenue: Union[int, float],
+        initial_yearly_operating_expenses: Union[int, float],
+        initial_yearly_capital_reserves: Union[int, float],
         annual_revenue_growth: float,
         annual_expense_growth: float,
         annual_capital_reserve_growth: float,
@@ -36,7 +92,6 @@ class DealMetrics:
     ) -> None:
         self.purchase_price: int = math.floor(purchase_price)
         self.closing_and_renovations: int = math.floor(closing_and_renovations)
-        self.net_leasable_area: Union[int, float] = round(net_leasable_area, 2)
 
         if percentage:
             self.going_in_cap_rate: float = round(going_in_cap_rate / 100, 4)
@@ -49,10 +104,9 @@ class DealMetrics:
             self.annual_expense_growth: float = round(annual_expense_growth, 4)
             self.annual_capital_reserve_growth: float = round(annual_capital_reserve_growth, 4)
 
-        # Calculated Fields
-        self.initial_revenue: Union[int, float] = round(self.net_leasable_area * yearly_sf_operating_revenue, 2)
-        self.initial_expenses: Union[int, float] = - round(self.net_leasable_area * yearly_sf_operating_expenses, 2)
-        self.initial_capital_reserve: Union[int, float] = - round(self.net_leasable_area * yearly_sf_capital_reserves, 2)
+        self.initial_revenue: Union[int, float] = round(initial_yearly_revenue, 2)
+        self.initial_expenses: Union[int, float] = - round(initial_yearly_operating_expenses, 2)
+        self.initial_capital_reserve: Union[int, float] = - round(initial_yearly_capital_reserves, 2)
 
     def __str__(self) -> str:
         """JSON string like that represents the initial metricss of the deal.
@@ -61,7 +115,6 @@ class DealMetrics:
             "PurchasePrice": self.purchase_price,
             "GoingInCapRate(%)": round(self.going_in_cap_rate * 100, 2),
             "ClosingAndRenovations": self.closing_and_renovations,
-            "NetLeasableArea": self.net_leasable_area,
             "Year1Revenue": self.initial_revenue,
             "Year1Expenses": self.initial_expenses,
             "Year1CapitalReserve": self.initial_capital_reserve,
@@ -318,9 +371,9 @@ class ReturnOfInvestmentMetrics:
 
     def __str__(self) -> str:
         string = {
-            "IRR(%)": self.irr,
+            "IRR(%)": round(self.irr * 100, 2),
             "EquityMultiple": self.equity_multiple,
-            "AverageCashOnCashReturn": self.average_cash_on_cash_return,
+            "AverageCashOnCashReturn(%)": round(self.average_cash_on_cash_return * 100, 2),
             "YearlyNetCashFlowProjection": self.yearly_net_cash_flow_projection,
         }
         return json.dumps(string, indent=4)
@@ -352,7 +405,7 @@ class ReturnOfInvestmentMetrics:
         float
             Percentage that represents the CashOnCashReturn of investment.
         """
-        return round(net_cash_flow / abs(self.adquisition_cost) * 100, 2)
+        return round(net_cash_flow / abs(self.adquisition_cost), 4)
 
     def AverageCashOnCashReturn(
         self,
@@ -366,7 +419,7 @@ class ReturnOfInvestmentMetrics:
             Percentage that represents the Average Cash on Cash return of
             investment.
         """
-        return round(statistics.mean(self.YearlyCashOnCashReturn()), 2)
+        return round(statistics.mean(self.YearlyCashOnCashReturn()), 4)
 
     def IRR(
         self,
@@ -381,7 +434,7 @@ class ReturnOfInvestmentMetrics:
         float
             Percentage that represent the IRR of the investment.
         """
-        return round(npf.irr(self.levered_net_cash_flows) * 100, 2)
+        return round(npf.irr(self.levered_net_cash_flows), 4)
 
     def EquityMultiple(
         self,
@@ -446,27 +499,161 @@ class ReturnOfInvestmentMetrics:
 
     def YearlyCashOnCashReturn(self) -> List[float]:
         yearly_cash_on_cash_return: List[float] = [
-            i["CashOnCashReturn"] for i in self.yearly_net_cash_flow_projection
-            if "CashOnCashReturn" in i
+            year["CashOnCashReturn"] for year in self.yearly_net_cash_flow_projection
+            if "CashOnCashReturn" in year
         ]
         return yearly_cash_on_cash_return
+
+    def ReturnMetricsOfInvestment(self) -> Dict[str, float]:
+        metrics: Dict[str, float] = {
+            "IRR": self.irr,
+            "EquityMultiple": self.equity_multiple,
+            "AverageCashOnCashReturn": self.average_cash_on_cash_return,
+        }
+        return metrics
+
+class TargetInvestmentMetrics:
+    def __init__(
+        self,
+        irr: float,
+        acocr: float,
+        eqm: float,
+        percentage: bool = True,
+    ) -> None:
+        if percentage:
+            self.irr: float = round(irr / 100, 4)
+            self.acocr: float = round(acocr / 100, 4)
+        else:
+            self.irr: float = round(irr, 4)
+            self.acocr: float = round(acocr, 4)
+
+        self.eqm = round(eqm, 4)
+
+    def __str__(self) -> str:
+        string: Dict = {
+            "IRR(%)": round(self.irr * 100, 2),
+            "EquityMultiple": self.eqm,
+            "AverageCashOnCashReturn(%)": round(self.acocr * 100,2),
+        }
+        return json.dumps(string, indent=4)
+
+    def TargetMetricsOfInvestment(self) -> Dict[str, float]:
+        metrics: Dict[str, float] = {
+            "IRR": self.irr,
+            "EquityMultiple": self.eqm,
+            "AverageCashOnCashReturn": self.acocr,
+        }
+        return metrics
+
+    def PurchasePriceMaximizer(
+        self,
+    ) -> float:
+        """Returns that maximum purchase price of a property, given the target
+        metrics.
+        """
+        maximum_purchase_price: float = 0.0
+        return maximum_purchase_price
+
+
+def GradientDescentPurchasePriceMaximizer(
+    initial_pp: int,
+    initial_dm: DealMetrics,
+    initial_lm: LoanTerms,
+    sm: SaleMetrics,
+    tim: TargetInvestmentMetrics,
+    max_iterations: int = 100_000,
+    learning_rate = 10_000,
+    tolerance: float = 0.0001,
+) -> Dict[str, float]:
+    """
+    """
+
+    purchase_price = initial_pp
+    Expected_ROI: Dict[str, float] = tim.TargetMetricsOfInvestment()
+    iterations = 0
+
+    while max_iterations > iterations:
+
+        deal_metrics: DealMetrics = DealMetrics(
+            purchase_price=purchase_price,
+            going_in_cap_rate=initial_dm.going_in_cap_rate,
+            closing_and_renovations=initial_dm.closing_and_renovations,
+            initial_yearly_revenue=initial_dm.initial_revenue,
+            initial_yearly_operating_expenses=-initial_dm.initial_expenses,
+            initial_yearly_capital_reserves=-initial_dm.initial_capital_reserve,
+            annual_revenue_growth=initial_dm.annual_revenue_growth,
+            annual_expense_growth=initial_dm.annual_expense_growth,
+            annual_capital_reserve_growth=initial_dm.annual_capital_reserve_growth,
+            percentage=False,
+        )
+
+        loan_terms: LoanTerms = LoanTerms(
+            purchase_price=purchase_price,
+            loan_to_value_ratio=initial_lm.loan_to_value_ratio,
+            loan_origination_fees=initial_lm.loan_origination_fees,
+            interest_rate=initial_lm.interest_rate,
+            amortization=initial_lm.amortization,
+            term=initial_lm.term,
+            percentage=False,
+        )
+
+        sale_metrics: SaleMetrics = SaleMetrics(
+            exit_cap_rate=sm.exit_cap_rate,
+            cost_of_sale=sm.cost_of_sale,
+            sale_year=sm.sale_year,
+            percentage=False,
+        )
+
+        ROI: Dict[str, float] = ReturnOfInvestmentMetrics(
+            deal_metrics=deal_metrics,
+            loan_terms=loan_terms,
+            sale_metrics=sale_metrics,
+        ).ReturnMetricsOfInvestment()
+
+        ROI_DIFF = {
+            key: Expected_ROI[key] - ROI[key] for key in Expected_ROI.keys()
+        }
+
+        if all(abs(diff) <= tolerance for diff in ROI_DIFF.values()):
+            ROI["PurchasePrice"] = purchase_price
+            return ROI
+
+        avg_difference: float = round(sum(ROI_DIFF.values()) / len(ROI_DIFF), 4)
+
+        purchase_price -= learning_rate * avg_difference
+        purchase_price = math.floor(purchase_price)
+
+        if purchase_price <= 0:
+            raise ValueError("The Purchase Price is 0 or bellow.")
+
+        iterations += 1
+    else:
+        raise ValueError(f"Searched value not found. Last Iteration ended in {purchase_price}")
 
 
 if __name__ == "__main__":
 
     import json
 
-    # purchase_price = 8_000_000
-    purchase_price = 6_500_000
+    purchase_price = 8_000_000
 
-    deal = DealMetrics(
+    cre: CREInformation = CREInformation(
+        net_leasable_area=25_000,
+        initial_yearly_sf_operating_revenue=27.50,
+        initial_yearly_sf_operating_expenses=12.00,
+        initial_yearly_sf_capital_reserves=0.30,
+    )
+
+    print("CRE DETAILS")
+    print(cre)
+
+    deal: DealMetrics = DealMetrics(
         purchase_price=purchase_price,
         going_in_cap_rate=4.84,
         closing_and_renovations=80_000,
-        net_leasable_area=25_000,
-        yearly_sf_operating_revenue=27.50,
-        yearly_sf_operating_expenses=12.00,
-        yearly_sf_capital_reserves=0.30,
+        initial_yearly_revenue=cre.CREYearlyRevenue(),
+        initial_yearly_operating_expenses=cre.CREYearlyExpenses(),
+        initial_yearly_capital_reserves=cre.CREYearlyCapitalReserves(),
         annual_revenue_growth=3.00,
         annual_expense_growth=2.50,
         annual_capital_reserve_growth=2.50,
@@ -503,5 +690,31 @@ if __name__ == "__main__":
         sale_metrics=sale,
     )
 
-    print("DEAL RETURN PROJECTION")
-    print(deal_projection)
+    # print("DEAL RETURN PROJECTION")
+    # print(deal_projection)
+
+    print("DEAL ROI")
+    print(json.dumps(deal_projection.ReturnMetricsOfInvestment(), indent=4))
+
+    target_investment_metrics = TargetInvestmentMetrics(
+        irr=14,
+        eqm=3,
+        acocr=8,
+    )
+
+    print("TARGET ROI")
+    print(json.dumps(target_investment_metrics.TargetMetricsOfInvestment(), indent=4))
+
+
+    max_pp = GradientDescentPurchasePriceMaximizer(
+        initial_pp=purchase_price,
+        initial_dm=deal,
+        initial_lm=loan_terms,
+        sm=sale,
+        tim=target_investment_metrics,
+        learning_rate=100_000,
+        tolerance=0.005,
+        max_iterations=1_000,
+    )
+    print("MAXIMAZED PURCHASE PRICE FOR THE TARGET ROI")
+    print(json.dumps(max_pp, indent=4))
