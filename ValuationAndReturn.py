@@ -3,13 +3,9 @@ CRE Valuation and Return Of Investment Metrics
 """
 from typing import (
     Union,
-    Optional,
-    Literal,
     Iterable,
     List,
     Dict,
-    Any,
-    Tuple,
 )
 import math
 import statistics
@@ -79,7 +75,7 @@ class DealMetrics:
     """All the information that comes from the client.
     """
     def __init__(self,
-        purchase_price: int,
+        purchase_price: Union[int, float],
         going_in_cap_rate: float,
         closing_and_renovations: int,
         initial_yearly_revenue: Union[int, float],
@@ -129,7 +125,7 @@ class LoanTerms:
     """All the information that comes from the bank.
     """
     def __init__(self,
-        purchase_price: int,
+        purchase_price: Union[int, float],
         loan_to_value_ratio: float,
         loan_origination_fees: float,
         interest_rate: float,
@@ -152,7 +148,7 @@ class LoanTerms:
             self.interest_rate: float = round(interest_rate, 4)
 
         # CALCULATED FIELDS
-        self.loan_ammount: int = round(purchase_price * self.loan_to_value_ratio, 2)
+        self.loan_ammount: float = round(math.floor(purchase_price) * self.loan_to_value_ratio, 2)
         self.balloon_payment: float = self.BalloonPayment(future_value=future_value)
         self.yearly_loan_payment: float = self.YearlyLoanPayment(future_value=future_value)
 
@@ -545,14 +541,79 @@ class TargetInvestmentMetrics:
         }
         return metrics
 
-    def PurchasePriceMaximizer(
+    def GradientDescentPurchasePriceMaximizer(
         self,
-    ) -> float:
+        initial_pp: Union[int, float],
+        initial_dm: DealMetrics,
+        initial_lm: LoanTerms,
+        sm: SaleMetrics,
+        max_iterations: int = 1_000_000,
+        learning_rate = 100_000,
+        tolerance: float = 0.005,
+    ) -> Dict[str, float]:
         """Returns that maximum purchase price of a property, given the target
         metrics.
         """
-        maximum_purchase_price: float = 0.0
-        return maximum_purchase_price
+        purchase_price: Union[int, float] = initial_pp
+        Expected_ROI: Dict[str, float] = self.TargetMetricsOfInvestment()
+        iterations: int = 0
+
+        while max_iterations > iterations:
+
+            deal_metrics: DealMetrics = DealMetrics(
+                purchase_price=purchase_price,
+                going_in_cap_rate=initial_dm.going_in_cap_rate,
+                closing_and_renovations=initial_dm.closing_and_renovations,
+                initial_yearly_revenue=initial_dm.initial_revenue,
+                initial_yearly_operating_expenses=-initial_dm.initial_expenses,
+                initial_yearly_capital_reserves=-initial_dm.initial_capital_reserve,
+                annual_revenue_growth=initial_dm.annual_revenue_growth,
+                annual_expense_growth=initial_dm.annual_expense_growth,
+                annual_capital_reserve_growth=initial_dm.annual_capital_reserve_growth,
+                percentage=False,
+            )
+
+            loan_terms: LoanTerms = LoanTerms(
+                purchase_price=purchase_price,
+                loan_to_value_ratio=initial_lm.loan_to_value_ratio,
+                loan_origination_fees=initial_lm.loan_origination_fees,
+                interest_rate=initial_lm.interest_rate,
+                amortization=initial_lm.amortization,
+                term=initial_lm.term,
+                percentage=False,
+            )
+
+            sale_metrics: SaleMetrics = SaleMetrics(
+                exit_cap_rate=sm.exit_cap_rate,
+                cost_of_sale=sm.cost_of_sale,
+                sale_year=sm.sale_year,
+                percentage=False,
+            )
+
+            ROI: Dict[str, float] = ReturnOfInvestmentMetrics(
+                deal_metrics=deal_metrics,
+                loan_terms=loan_terms,
+                sale_metrics=sale_metrics,
+            ).ReturnMetricsOfInvestment()
+
+            ROI_DIFF = {
+                key: Expected_ROI[key] - ROI[key] for key in Expected_ROI.keys()
+            }
+
+            if all(abs(diff) <= tolerance for diff in ROI_DIFF.values()):
+                ROI["PurchasePrice"] = purchase_price
+                return ROI
+
+            avg_difference: float = round(sum(ROI_DIFF.values()) / len(ROI_DIFF), 4)
+
+            purchase_price -= learning_rate * avg_difference
+
+            if purchase_price <= 0:
+                raise ValueError("The Purchase Price is 0 or bellow.")
+
+            iterations += 1
+        else:
+            raise ValueError(f"Searched value not found. Last Iteration ended in {purchase_price}")
 
 
 def GradientDescentPurchasePriceMaximizer(
@@ -705,16 +766,28 @@ if __name__ == "__main__":
     print("TARGET ROI")
     print(json.dumps(target_investment_metrics.TargetMetricsOfInvestment(), indent=4))
 
-
-    max_pp = GradientDescentPurchasePriceMaximizer(
+    print("MAXIMAZED PURCHASE PRICE FOR THE TARGET ROI")
+    max_pp: Dict = target_investment_metrics.GradientDescentPurchasePriceMaximizer(
         initial_pp=purchase_price,
         initial_dm=deal,
         initial_lm=loan_terms,
         sm=sale,
-        tim=target_investment_metrics,
         learning_rate=100_000,
         tolerance=0.005,
         max_iterations=1_000,
     )
-    print("MAXIMAZED PURCHASE PRICE FOR THE TARGET ROI")
+
     print(json.dumps(max_pp, indent=4))
+
+    # max_pp = GradientDescentPurchasePriceMaximizer(
+    #     initial_pp=purchase_price,
+    #     initial_dm=deal,
+    #     initial_lm=loan_terms,
+    #     sm=sale,
+    #     tim=target_investment_metrics,
+    #     learning_rate=100_000,
+    #     tolerance=0.005,
+    #     max_iterations=1_000,
+    # )
+    # print("MAXIMAZED PURCHASE PRICE FOR THE TARGET ROI")
+    # print(json.dumps(max_pp, indent=4))
