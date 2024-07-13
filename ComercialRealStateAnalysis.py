@@ -220,6 +220,7 @@ class LoanTerms:
             "LTV(%)": round(self.loan_to_value_ratio * 100, 2),
             "LoanOriginationFees(%)": round(self.loan_origination_fees * 100, 2),
             "InterestRate(%)": round(self.interest_rate * 100, 2),
+            "InterestOnlyPeriod": self.interest_only_period,
             "Amortization": self.amortization,
             "Term": self.term,
             "BalloonPaymen": self.balloon_payment,
@@ -639,22 +640,19 @@ class ReturnOfInvestmentMetrics:
 
         # sale price with the projected NOI
         sale_price = self.sale_metrics.ProjectedSalePrice(after_term_noi)
-        print(sale_price)
         # Capital gains taxes
         closing_and_renovations = self.deal_metrics.closing_and_renovations
         capital_gains: float = round(sale_price - purchase_price - closing_and_renovations, 2)
         cgt: float = - round(capital_gains * self.tax_assumptions.capital_gains_tax_rate, 2)
-        print(cgt)
         # Depreciation Recapture Tax
         drtr = self.tax_assumptions.depreciation_recapture_tax_rate
         drt = round(depreciation * self.sale_metrics.sale_year * drtr, 2)
-        print(drt)
 
         sale: Dict = yearly_net_cash_flow[-1]
         sale["NetCashFlow"] = round((
             sale["NetCashFlow"] +
             self.sale_metrics.ProjectedSalePrice(after_term_noi) +
-            drtr +
+            drt +
             cgt +
             self.loan_terms.balloon_payment
         ), 2)
