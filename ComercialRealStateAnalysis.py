@@ -947,29 +947,30 @@ if __name__ == "__main__":
     print("DEAL RETURN PROJECTION")
     print(deal_projection)
 
-    # print("DEAL ROI")
-    # print(json.dumps(deal_projection.ReturnMetricsOfInvestment(), indent=4))
+    print("DEAL ROI")
+    print(json.dumps(deal_projection.ReturnMetricsOfInvestment(), indent=4))
 
-    # target_investment_metrics = TargetInvestmentMetrics(
-    #     irr=14,
-    #     eqm=3,
-    #     acocr=8,
-    # )
+    target_investment_metrics = TargetInvestmentMetrics(
+        irr=10,
+        eqm=1.5,
+        acocr=6,
+    )
 
-    # print("TARGET ROI")
-    # print(json.dumps(target_investment_metrics.TargetMetricsOfInvestment(), indent=4))
+    print("TARGET ROI")
+    print(json.dumps(target_investment_metrics.TargetMetricsOfInvestment(), indent=4))
 
-    # max_pp: Dict = target_investment_metrics.GradientDescentPurchasePriceMaximizer(
-    #     initial_pp=purchase_price,
-    #     initial_dm=deal,
-    #     initial_lm=loan_terms,
-    #     sm=sale,
-    #     learning_rate=100_000,
-    #     tolerance=0.005,
-    #     max_iterations=1_000,
-    # )
-    # print("MAXIMAZED PURCHASE PRICE FOR THE TARGET ROI")
-    # print(json.dumps(max_pp, indent=4))
+    max_pp: Dict = target_investment_metrics.GradientDescentPurchasePriceMaximizer(
+        initial_pp=purchase_price,
+        initial_dm=deal,
+        initial_lm=loan_terms,
+        taxes=taxes,
+        sm=sale,
+        learning_rate=100_000,
+        tolerance=0.005,
+        max_iterations=10_000,
+    )
+    print("MAXIMAZED PURCHASE PRICE FOR THE TARGET ROI")
+    print(json.dumps(max_pp, indent=4))
 
     # max_pp = GradientDescentPurchasePriceMaximizer(
     #     initial_pp=purchase_price,
