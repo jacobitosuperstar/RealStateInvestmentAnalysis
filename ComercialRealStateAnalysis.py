@@ -7,6 +7,7 @@ from typing import (
     List,
     Dict,
 )
+import warnings
 import math
 import statistics
 
@@ -733,6 +734,7 @@ class TargetInvestmentMetrics:
         Expected_ROI: Dict[str, float] = self.TargetMetricsOfInvestment()
         iterations: int = 0
 
+
         while max_iterations > iterations:
 
             deal_metrics: DealMetrics = DealMetrics(
@@ -774,7 +776,7 @@ class TargetInvestmentMetrics:
             ).ReturnMetricsOfInvestment()
 
             ROI_DIFF = {
-                key: Expected_ROI[key] - ROI[key] for key in Expected_ROI.keys()
+                key: round(Expected_ROI[key] - ROI[key], 4) for key in Expected_ROI.keys()
             }
 
             if all(abs(diff) <= tolerance for diff in ROI_DIFF.values()):
@@ -787,6 +789,12 @@ class TargetInvestmentMetrics:
 
             if purchase_price <= 0:
                 raise ValueError("The Purchase Price is 0 or bellow.")
+
+            if math.isnan(purchase_price):
+                purchase_price: float = round(0, 4)
+                warnings.warn(f"The initial Purchase Price was too high, starting the search from {purchase_price}", RuntimeWarning)
+
+            purchase_price = math.floor(purchase_price)
 
             iterations += 1
         else:
@@ -887,7 +895,7 @@ if __name__ == "__main__":
     print("TAX DETAILS")
     print(taxes)
 
-    purchase_price = 10_000_000
+    purchase_price: int = 8_000_000
 
     cre: CREInformation = CREInformation(
         net_leasable_area=25_000,
@@ -914,7 +922,7 @@ if __name__ == "__main__":
     print("DEAL DETAILS")
     print(deal)
 
-    loan_terms = LoanTerms(
+    loan_terms: LoanTerms = LoanTerms(
         purchase_price=purchase_price,
         loan_to_value_ratio=65,
         loan_origination_fees=1,
@@ -927,7 +935,7 @@ if __name__ == "__main__":
     print("LOAN TERMS")
     print(loan_terms)
 
-    sale = SaleMetrics(
+    sale: SaleMetrics = SaleMetrics(
         exit_cap_rate=6.50,
         cost_of_sale=2.50,
         sale_year=5,
@@ -937,7 +945,7 @@ if __name__ == "__main__":
     print("SALE END OF THE TERM")
     print(sale)
 
-    deal_projection = ReturnOfInvestmentMetrics(
+    deal_projection: ReturnOfInvestmentMetrics = ReturnOfInvestmentMetrics(
         deal_metrics=deal,
         tax_assumptions=taxes,
         loan_terms=loan_terms,
@@ -950,7 +958,7 @@ if __name__ == "__main__":
     print("DEAL ROI")
     print(json.dumps(deal_projection.ReturnMetricsOfInvestment(), indent=4))
 
-    target_investment_metrics = TargetInvestmentMetrics(
+    target_investment_metrics: TargetInvestmentMetrics = TargetInvestmentMetrics(
         irr=10,
         eqm=1.5,
         acocr=6,
@@ -966,8 +974,8 @@ if __name__ == "__main__":
         taxes=taxes,
         sm=sale,
         learning_rate=100_000,
-        tolerance=0.005,
-        max_iterations=10_000,
+        tolerance=0.05,
+        max_iterations=100_000,
     )
     print("MAXIMAZED PURCHASE PRICE FOR THE TARGET ROI")
     print(json.dumps(max_pp, indent=4))
