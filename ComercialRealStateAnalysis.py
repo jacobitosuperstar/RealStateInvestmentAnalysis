@@ -212,7 +212,7 @@ class LoanTerms:
         self.yearly_loan_payment: float = self.YearlyLoanPayment(future_value)
         self.yearly_loan_principal_payments: Iterable[float] = self.YearlyLoanPrincipalPayments(future_value)
         self.yearly_loan_interest_payments: Iterable[float] = self.YearlyLoanInterestPayments(future_value)
-        self.balloon_payment: float = self.BalloonPayment(future_value)
+        self.balloon_payment: float = self.BalloonPayment()
 
 
     def __str__(self) -> str:
@@ -395,7 +395,6 @@ class LoanTerms:
 
     def BalloonPayment(
         self,
-        future_value: int = 0,
     ) -> float:
         """Balloon payment of the loan at the end of the term.
 
@@ -798,6 +797,7 @@ class TargetInvestmentMetrics:
 
             iterations += 1
         else:
+            print(ROI)
             raise ValueError(f"Searched value not found. Last Iteration ended in {purchase_price}")
 
 
@@ -895,7 +895,7 @@ if __name__ == "__main__":
     print("TAX DETAILS")
     print(taxes)
 
-    purchase_price: int = 8_000_000
+    purchase_price = 20_000_000
 
     cre: CREInformation = CREInformation(
         net_leasable_area=25_000,

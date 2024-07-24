@@ -8,8 +8,6 @@ import math
 import numpy as np
 import numpy_financial as npf
 
-from main import MLA_DebtYield
-
 
 class LoanMetrics:
     LTV: np.float64 = np.float64(65 / 100) # percentage
@@ -160,6 +158,19 @@ class LoanMetrics:
         self,
         future_value: int = 0,
     ) -> Dict[str, Any]:
+        """Condensates all the calculations from all the maximum loan ammounts
+        into a single dictionary.
+
+        Parameters
+        ----------
+        future_value: int,
+            Remaining capital at the end of the loan.
+
+        Returns
+        -------
+        Dict
+            All the loan sizing metrics.
+        """
         sized_loan: Dict[str, Any] = {
             "MLA_LTV": self.MLA_LTV(),
             "MLA_LTC": self.MLA_LTC(),
@@ -181,7 +192,9 @@ class LoanMetrics:
 
         Returns
         -------
-        Dict[str, Any]
+        Tuple[str, Union[float, int]]
+            Returns the loan type with the minimum value from all the loan
+            sizing metrics.
         """
         loan_sizing = self.loan_sizing(future_value=future_value)
         min_value = min(loan_sizing.values())
