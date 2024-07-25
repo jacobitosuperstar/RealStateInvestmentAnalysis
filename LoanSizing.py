@@ -2,6 +2,8 @@
 Loan Sizing
 """
 from typing import Union, Literal, Iterable, Dict, Any, Tuple
+import json
+import warnings
 import math
 # from dataclasses import dataclass
 
@@ -30,6 +32,7 @@ class LoanMetrics:
         amortization: int,
         term: int,
         payment_type: Literal["begin", "end"] = "end",
+        percentage: bool = True,
     ) -> None:
         """Class representation of the Loan Metrics that come from a commercial
         real state that is going to be bougth by a client.
@@ -55,14 +58,31 @@ class LoanMetrics:
             When the payment is done. At the end or the beginning of the month.
             By default is the end of the month.
         """
-        self.purchase_price: np.int64 = np.floor(purchase_price).astype(int)
-        self.appraised_value: np.int64 = np.floor(appraised_value).astype(int)
-        self.closing_and_renovations: int = np.floor(closing_and_renovations).astype(int)
-        self.interest_rate: np.float64 = np.float64(interest_rate)
-        self.net_operating_income: np.int64 = np.floor(net_operating_income).astype(int)
-        self.amortization: np.int64 = np.floor(amortization).astype(int)
-        self.term: np.int64 = np.floor(term).astype(int)
+        self.purchase_price: int = math.floor(purchase_price)
+        self.appraised_value: int = np.floor(appraised_value)
+        self.closing_and_renovations: int = np.floor(closing_and_renovations)
+        self.net_operating_income: int = math.floor(net_operating_income)
+        self.amortization: int = math.floor(amortization)
+        self.term: int = math.floor(term)
         self.payment_type: Literal["begin", "end"] = payment_type
+
+        if percentage:
+            self.interest_rate: float = round(interest_rate / 100, 4)
+        else:
+            self.interest_rate: float = round(interest_rate, 4)
+
+    def __str__(self) -> str:
+        loan_metrics = {
+            "PurchasePrice": self.purchase_price,
+            "AppraisedValue": self.appraised_value,
+            "ClosingAndRenovations": self.closing_and_renovations,
+            "InterestRate(%)": round(self.interest_rate * 100, 2),
+            "NOI": self.net_operating_income,
+            "Amortization": self.amortization,
+            "Term": self.term,
+            "PaymentType": self.payment_type,
+        }
+        return json.dumps(loan_metrics, indent=4)
 
     def payment(
         self,
@@ -84,7 +104,7 @@ class LoanMetrics:
         NDArray[float64] | float64
         """
 
-        if not self.payment_type in ["begin", "end"]:
+        if self.payment_type not in ["begin", "end"]:
             raise ValueError("Incorrect Value entered for the payment_type parameter")
 
         calculated_payment = npf.pmt(
@@ -94,7 +114,7 @@ class LoanMetrics:
             nper=self.amortization * 12,
             when=self.payment_type,
         )
-        return np.floor(calculated_payment).astype(int)
+        return np.round(calculated_payment, 2)
 
     def debt_payments(self) -> float:
         return 0.0
@@ -108,7 +128,7 @@ class LoanMetrics:
         Decimal
         """
         MLA_LTV = self.appraised_value * self.LTV
-        return np.floor(MLA_LTV).astype(int)
+        return math.floor(MLA_LTV)
 
     def MLA_LTC(self,) -> Union[int, float]:
         """Maximum loan to cost. This tells us how much of the total value of the
@@ -119,7 +139,7 @@ class LoanMetrics:
         Decimal
         """
         MLA_LTC = self.LTC * (self.purchase_price + self.closing_and_renovations)
-        return np.floor(MLA_LTC).astype(int)
+        return math.floor(MLA_LTC)
 
     def MLA_DSCR(
         self,
@@ -148,11 +168,11 @@ class LoanMetrics:
             fv=future_value,
             when=self.payment_type,
         )
-        return np.floor(present_value).astype(int)
+        return math.floor(present_value)
 
     def MLA_DebtYield(self,) -> int:
         MLA_DebtYield = self.net_operating_income / self.DEBT_YIELD
-        return np.floor(MLA_DebtYield).astype(int)
+        return math.floor(MLA_DebtYield)
 
     def loan_sizing(
         self,
@@ -213,6 +233,65 @@ class LoanMetrics:
         cap_rate = self.net_operating_income / self.purchase_price
         return np.round(cap_rate, decimals=5)
 
+
+def GradientDescentReqNOIMaxLoan(
+    initial_noi: int,
+    initial_lm: LoanMetrics,
+    future_value: int = 0,
+    max_iterations: int = 1_000_000,
+    learning_rate = 100_000,
+    tolerance: float = 0.005,
+    ) -> Union[int, float]:
+    """Returns the maximum net operating income needed to get the maximum loan
+    ammount and still meet the loan constrains.
+
+    The maximum loan ammount will always be the maximum Loan To Value ratio
+    allowed by the bank.
+    """
+
+    net_operating_income = initial_noi
+    iterations = 0
+
+    while max_iterations > iterations:
+
+        loan_metrics: LoanMetrics = LoanMetrics(
+            purchase_price=initial_lm.purchase_price,
+            appraised_value=initial_lm.appraised_value,
+            closing_and_renovations=initial_lm.closing_and_renovations,
+            interest_rate=initial_lm.interest_rate,
+            net_operating_income=net_operating_income,
+            amortization=initial_lm.amortization,
+            term=initial_lm.term,
+            payment_type=initial_lm.payment_type,
+        )
+
+        min_loan_ammount = loan_metrics.mLA(future_value)[-1]
+        max_loan_ammount = loan_metrics.MLA_LTV()
+
+        diff = round((min_loan_ammount/max_loan_ammount) - 1, 2)
+
+        if abs(diff) <= tolerance:
+            return net_operating_income
+
+        net_operating_income -= learning_rate * diff
+
+        if net_operating_income <= 0:
+            raise ValueError("The Net Operating Income is 0 or bellow.")
+
+        if math.isnan(net_operating_income):
+            net_operating_income: float = round(0, 4)
+            warnings.warn(
+                f"The initial Purchase Price was too high, starting the search from {net_operating_income}",
+                RuntimeWarning
+            )
+
+        net_operating_income = math.floor(net_operating_income)
+
+        iterations += 1
+    else:
+        raise ValueError(f"Searched value not found. Last Iteration ended in {net_operating_income}")
+
+
 def leverage(
     purchase_price: int,
     loan_to_value_ratio: Union[int, float],
@@ -245,19 +324,23 @@ def leverage(
 
 if __name__ == "__main__":
 
+    net_operating_income = 250_000
+
     loan_metrics = LoanMetrics(
         purchase_price = 10_000_000,
         appraised_value = 10_000_000,
         closing_and_renovations = 500_000,
-        interest_rate = 0.045,
-        net_operating_income = 500_000,
+        interest_rate = 4.50,
+        net_operating_income = net_operating_income,
         amortization = 25,
         term = 10,
         payment_type = "end",
     )
+    print(loan_metrics)
 
     loan_sizing = loan_metrics.loan_sizing(0)
-    print("loan_sizing: ", loan_sizing)
+    string = json.dumps(loan_sizing, indent=4)
+    print("loan_sizing: ", string)
 
     minimum_loan_ammount = loan_metrics.mLA(0)[1]
     print("minimum_loan_ammount: ", minimum_loan_ammount)
@@ -271,11 +354,21 @@ if __name__ == "__main__":
     cap_rate = loan_metrics.capitalization_rate()
     print("capitalization_rate: ", cap_rate)
 
-    leveraged_earnings = leverage(
-        purchase_price=10_000_000,
-        loan_to_value_ratio=80,
-        value_change=-20,
-        percentage=True,
-    )
+    # leveraged_earnings = leverage(
+    #     purchase_price=10_000_000,
+    #     loan_to_value_ratio=80,
+    #     value_change=-20,
+    #     percentage=True,
+    # )
 
-    print("leveraged_earnings_stats: ", leveraged_earnings)
+    # print("leveraged_earnings_stats: ", leveraged_earnings)
+
+    noi = GradientDescentReqNOIMaxLoan(
+        initial_noi=net_operating_income,
+        initial_lm=loan_metrics,
+        future_value=0,
+        max_iterations=100_000,
+        learning_rate=100_000,
+        tolerance=0.005,
+    )
+    print("Required Net Operating Income for Loan Ammount: ", noi)
