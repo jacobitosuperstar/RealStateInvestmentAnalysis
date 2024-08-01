@@ -73,6 +73,10 @@ class LoanMetrics:
 
     def __str__(self) -> str:
         loan_metrics = {
+            "LTV Constraint (%)": round(self.LTV * 100, 2),
+            "LTC Constraint (%)": round(self.LTC * 100, 2),
+            "DSCR Constraint": self.DSCR,
+            "DebtYield Constraint (%)": round(self.DEBT_YIELD * 100, 2),
             "PurchasePrice": self.purchase_price,
             "AppraisedValue": self.appraised_value,
             "ClosingAndRenovations": self.closing_and_renovations,
